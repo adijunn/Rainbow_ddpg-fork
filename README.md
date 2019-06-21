@@ -1,3 +1,10 @@
+#ddpg.py:
+Equivalent of ddpg_learner.py in openai/baselines repository.
+
+
+
+
+
 # Rainbow DDPG Fork
 
 This repository contains Rainbow DDPG algorithm from paper Sim-to-Real Reinforcement Learning for Deformable Object Manipulation along with a toy pushing task to demonstrate how to use the code.
