@@ -12,17 +12,79 @@ import tensorflow as tf
 from mpi4py import MPI
 from micoenv import demo_policies as demo
 
+#Adi: make_vec_env method goes here (same as make_env except handles mutliple parallel environments)
+#TODO
+#def make_vec_env():
+
+#Adi: Added make_env method in order to support cloth env which can't be generated using gym.make()
+def make_env(env_id, env_type, mpi_rank=0, subrank=0, seed=None, reward_scale=1.0,
+             gamestate=None, flatten_dict_observations=True, wrapper_kwargs=None,
+             logger_dir=None, cloth_cfg_path=None, render_path=None, start_state_path=None):
+    """Daniel: make single instance of env, to be wrapped in VecEnv for parallelism.
+    We need to have a special if case for the clothenv, which doesn't actually
+    use `gym.make(...)` because we have a custom configuration.
+    """
+    wrapper_kwargs = wrapper_kwargs or {}
+
+    if env_type == 'cloth':
+        assert cloth_cfg_path is not None
+        from gym_cloth.envs import ClothEnv
+        env = ClothEnv(cloth_cfg_path, subrank=subrank, start_state_path=start_state_path)
+        print('Created ClothEnv, seed {}, mpi_rank {}, subrank {}.'.format(seed, mpi_rank, subrank))
+        print('start_state_path: {}'.format(start_state_path))
+        # Daniel: render, but currently only works if we have one env, not a vec ...
+        if render_path is not None:
+            env.render(filepath=render_path)
+    elif env_type == 'atari':
+        env = make_atari(env_id)
+    elif env_type == 'retro':
+        import retro
+        gamestate = gamestate or retro.State.DEFAULT
+        env = retro_wrappers.make_retro(game=env_id,
+                                        max_episode_steps=10000,
+                                        use_restricted_actions=retro.Actions.DISCRETE,
+                                        state=gamestate)
+    else:
+        env = gym.make(env_id)
+
+    if flatten_dict_observations and isinstance(env.observation_space, gym.spaces.Dict):
+        keys = env.observation_space.spaces.keys()
+        env = gym.wrappers.FlattenDictWrapper(env, dict_keys=list(keys))
+
+    env.seed(seed + subrank if seed is not None else None)
+    env = Monitor(env,
+                  logger_dir and os.path.join(logger_dir, str(mpi_rank) + '.' + str(subrank)),
+                  allow_early_resets=True)
+
+    if env_type == 'atari':
+        env = wrap_deepmind(env, **wrapper_kwargs)
+    elif env_type == 'retro':
+        if 'frame_stack' not in wrapper_kwargs:
+            wrapper_kwargs['frame_stack'] = 1
+        env = retro_wrappers.wrap_deepmind_retro(env, **wrapper_kwargs)
+
+    if reward_scale != 1:
+        env = retro_wrappers.RewardScaler(env, reward_scale)
+
+    return env
+
 
 def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_layers, dense_layer_size, layer_norm,
         demo_epsilon, replay_alpha, conv_size, **kwargs):
+    
 
+    
+    #Adi: Commenting out the following 7 lines to replace with next section 
     # Create envs.
-    env = gym.make(env_id)
-    if evaluation:
-        eval_env = gym.make(eval_env_id)
-    else:
-        eval_env = None
-    demo_env = gym.make(env_id)
+    #env = gym.make(env_id)
+    #if evaluation:
+        #eval_env = gym.make(eval_env_id)
+    #else:
+        #eval_env = None
+    #demo_env = gym.make(env_id)
+
+    #Adi: In order to support cloth envs, we can't do a normal gym.make() calls, so we do the following instead:
+    env = make_env() #What parameters get passed in here?
 
     # Parse noise_type
     action_noise = None
