@@ -69,10 +69,65 @@ def make_env(env_id, env_type, mpi_rank=0, subrank=0, seed=None, reward_scale=1.
     return env
 
 
-def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_layers, dense_layer_size, layer_norm,
-        demo_epsilon, replay_alpha, conv_size, **kwargs):
+def build_env(args, cloth_cfg_path=None, render_path=None, start_state_path=None):
+    """Daniel: actually construct the env, using 'vector envs' for parallelism.
+    For now our cloth env can follow the non-atari and non-retro stuff, because
+    I don't think we need a similar kind of 'wrapping' that they do. Note that
+    `VecFrameStack` is needed to stack frames, e.g., in Atari we do 4 frame
+    stacking. Without that, the states would be size (84,84,1).
+    The non-`args` parameters here are for the cloth env.
+    """
+    
+    #Adi: Need to modify the next section because no 'args' parameter
+    ncpu = multiprocessing.cpu_count()
+    if sys.platform == 'darwin': ncpu //= 2
+    #nenv = args.num_env or ncpu
+    nenv = ncpu
+    #alg = args.alg
+    alg = "ddpg" #Need to change this
+    #seed = args.seed
+    seed = seed #Can we just pass in seed?
+    #env_type, env_id = get_env_type(args)
     
 
+    if env_type in {'atari', 'retro'}:
+        if alg == 'deepq':
+            env = make_env(env_id, env_type, seed=seed, wrapper_kwargs={'frame_stack': True})
+        elif alg == 'trpo_mpi':
+            env = make_env(env_id, env_type, seed=seed)
+        else:
+            frame_stack_size = 4
+            env = make_vec_env(env_id, env_type, nenv, seed,
+                               gamestate=args.gamestate,
+                               reward_scale=args.reward_scale)
+            env = VecFrameStack(env, frame_stack_size)
+    else:
+        config = tf.ConfigProto(allow_soft_placement=True,
+                                intra_op_parallelism_threads=1,
+                                inter_op_parallelism_threads=1)
+        config.gpu_options.allow_growth = True
+        get_session(config=config)
+        flatten_dict_observations = alg not in {'her'}
+        env = make_vec_env(env_id, env_type, args.num_env or 1, seed,
+                           #reward_scale=args.reward_scale,
+                           reward_scale=1
+                           flatten_dict_observations=flatten_dict_observations,
+                           cloth_cfg_path=cloth_cfg_path,
+                           render_path=render_path,
+                           start_state_path=start_state_path)
+        if env_type == 'mujoco':
+            env = VecNormalize(env)
+
+    return env
+
+
+def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_layers, dense_layer_size, layer_norm,
+        demo_epsilon, replay_alpha, conv_size, **kwargs):
+   
+    #Need to fill these in! 
+    cloth_cfg_path = ''
+    render_path = ''
+    init_state = ''
     
     #Adi: Commenting out the following 7 lines to replace with next section 
     # Create envs.
@@ -84,7 +139,19 @@ def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_laye
     #demo_env = gym.make(env_id)
 
     #Adi: In order to support cloth envs, we can't do a normal gym.make() calls, so we do the following instead:
-    env = make_env() #What parameters get passed in here?
+    seed = None
+    #if env_type == 'cloth':
+    with open(cloth_cfg_path, 'r') as fh:
+        cloth_config = yaml.load(fh)
+        #if args.seed is None:
+            #args.seed = cloth_config['seed']
+        seed = cloth_config['seed'] 
+	#Commented out following if statement because I think they already clip the action space to (-1, 1) in the DDPG file
+        #if 'clip_act_space' in cloth_config['env']:
+            #extra_args['limit_act_range'] = cloth_config['env']['clip_act_space']
+    env = build_env(kwargs, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path)
+    eval_env = build_env(kwargs, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path) 
+    demo_env = build_env(kwargs, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path) 
 
     # Parse noise_type
     action_noise = None

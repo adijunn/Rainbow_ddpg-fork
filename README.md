@@ -1,6 +1,9 @@
 # ddpg.py:
 Equivalent of ddpg_learner.py in openai/baselines repository. I don't think anything needs to be changed here for now in terms of compatibility.
 
+# distributed_train.py:
+Equivalent of ddpg.py in openai/baselines repository.  I don't think anything needs to be changed here for now either.
+
 # main.py
 Equivalent of run.py in openai/baselines repository. Things to note:
 1. Add a get_env_type method and so that we can use our gym_cloth environment
