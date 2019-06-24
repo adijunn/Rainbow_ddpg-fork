@@ -11,65 +11,14 @@ import gym
 import tensorflow as tf
 from mpi4py import MPI
 from micoenv import demo_policies as demo
-
-#Adi: make_vec_env method goes here (same as make_env except handles mutliple parallel environments)
-#TODO
-#def make_vec_env():
-
-#Adi: Added make_env method in order to support cloth env which can't be generated using gym.make()
-def make_env(env_id, env_type, mpi_rank=0, subrank=0, seed=None, reward_scale=1.0,
-             gamestate=None, flatten_dict_observations=True, wrapper_kwargs=None,
-             logger_dir=None, cloth_cfg_path=None, render_path=None, start_state_path=None):
-    """Daniel: make single instance of env, to be wrapped in VecEnv for parallelism.
-    We need to have a special if case for the clothenv, which doesn't actually
-    use `gym.make(...)` because we have a custom configuration.
-    """
-    wrapper_kwargs = wrapper_kwargs or {}
-
-    if env_type == 'cloth':
-        assert cloth_cfg_path is not None
-        from gym_cloth.envs import ClothEnv
-        env = ClothEnv(cloth_cfg_path, subrank=subrank, start_state_path=start_state_path)
-        print('Created ClothEnv, seed {}, mpi_rank {}, subrank {}.'.format(seed, mpi_rank, subrank))
-        print('start_state_path: {}'.format(start_state_path))
-        # Daniel: render, but currently only works if we have one env, not a vec ...
-        if render_path is not None:
-            env.render(filepath=render_path)
-    elif env_type == 'atari':
-        env = make_atari(env_id)
-    elif env_type == 'retro':
-        import retro
-        gamestate = gamestate or retro.State.DEFAULT
-        env = retro_wrappers.make_retro(game=env_id,
-                                        max_episode_steps=10000,
-                                        use_restricted_actions=retro.Actions.DISCRETE,
-                                        state=gamestate)
-    else:
-        env = gym.make(env_id)
-
-    if flatten_dict_observations and isinstance(env.observation_space, gym.spaces.Dict):
-        keys = env.observation_space.spaces.keys()
-        env = gym.wrappers.FlattenDictWrapper(env, dict_keys=list(keys))
-
-    env.seed(seed + subrank if seed is not None else None)
-    env = Monitor(env,
-                  logger_dir and os.path.join(logger_dir, str(mpi_rank) + '.' + str(subrank)),
-                  allow_early_resets=True)
-
-    if env_type == 'atari':
-        env = wrap_deepmind(env, **wrapper_kwargs)
-    elif env_type == 'retro':
-        if 'frame_stack' not in wrapper_kwargs:
-            wrapper_kwargs['frame_stack'] = 1
-        env = retro_wrappers.wrap_deepmind_retro(env, **wrapper_kwargs)
-
-    if reward_scale != 1:
-        env = retro_wrappers.RewardScaler(env, reward_scale)
-
-    return env
+from common.vec_env import VecFrameStack, VecNormalize, VecEnv
+from common.vec_env.vec_video_recorder import VecVideoRecorder
+from common.cmd_util import common_arg_parser, parse_unknown_args, make_vec_env, make_env
+from common.tf_util import get_session
 
 
-def build_env(args, cloth_cfg_path=None, render_path=None, start_state_path=None):
+
+def build_env(args, cloth_cfg_path=None, render_path=None, start_state_path=None, num_env, seed, alg):
     """Daniel: actually construct the env, using 'vector envs' for parallelism.
     For now our cloth env can follow the non-atari and non-retro stuff, because
     I don't think we need a similar kind of 'wrapping' that they do. Note that
@@ -82,12 +31,11 @@ def build_env(args, cloth_cfg_path=None, render_path=None, start_state_path=None
     ncpu = multiprocessing.cpu_count()
     if sys.platform == 'darwin': ncpu //= 2
     #nenv = args.num_env or ncpu
-    nenv = ncpu
     #alg = args.alg
-    alg = "ddpg" #Need to change this
     #seed = args.seed
-    seed = seed #Can we just pass in seed?
     #env_type, env_id = get_env_type(args)
+    env_type = 'Cloth-v0'
+    env_id = 'cloth'
     
 
     if env_type in {'atari', 'retro'}:
@@ -149,9 +97,9 @@ def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_laye
 	#Commented out following if statement because I think they already clip the action space to (-1, 1) in the DDPG file
         #if 'clip_act_space' in cloth_config['env']:
             #extra_args['limit_act_range'] = cloth_config['env']['clip_act_space']
-    env = build_env(kwargs, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path)
-    eval_env = build_env(kwargs, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path) 
-    demo_env = build_env(kwargs, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path) 
+    env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path, num_env, seed, alg)
+    eval_env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path, num_env, seed, alg) 
+    demo_env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path, num_env, seed, alg) 
 
     # Parse noise_type
     action_noise = None
