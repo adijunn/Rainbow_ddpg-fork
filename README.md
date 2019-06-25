@@ -5,14 +5,7 @@ Equivalent of ddpg_learner.py in openai/baselines repository. I don't think anyt
 Equivalent of ddpg.py in openai/baselines repository.  I don't think anything needs to be changed here for now either.
 
 # main.py
-Equivalent of run.py in openai/baselines repository. Things to note:
-1. Add a get_env_type method and so that we can use our gym_cloth environment
-2. The train method (in baselines-fork) and the run method are equivalent (starts the training procedure)
-3. Need to figure out equivalent of build_env method in baselines-fork. Includes a make_vec_env function which I need to figure out as well (should just vectorize the environment?) 
-4. Instead of directly calling gym.make() in the run method, we need to do what Daniel did in baselines-fork/baselines/common/cmd_util.py make_env and make_vec_env methods to support building the cloth env
-5.  
-
-
+Equivalent of run.py in openai/baselines repository.
 
 
 
