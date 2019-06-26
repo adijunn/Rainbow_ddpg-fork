@@ -11,13 +11,14 @@ except ImportError:
 
 import gym
 from gym.wrappers import FlattenDictWrapper
-from baselines import logger
-from baselines.bench import Monitor
-from baselines.common import set_global_seeds
-from baselines.common.atari_wrappers import make_atari, wrap_deepmind
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common import retro_wrappers
+#from baselines import logger
+import logger
+from bench import Monitor
+from common import set_global_seeds
+from common.atari_wrappers import make_atari, wrap_deepmind
+from common.vec_env.subproc_vec_env import SubprocVecEnv
+from common.vec_env.dummy_vec_env import DummyVecEnv
+from common import retro_wrappers
 
 
 def make_vec_env(env_id, env_type, num_env, seed,
