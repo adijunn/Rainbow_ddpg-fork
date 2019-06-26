@@ -3,6 +3,7 @@ An OpenAI Gym-style environment for the cloth smoothing experiments. It's not
 exactly their interface because we pass in a configuration file. See README.md
 document in this directory for details.
 """
+import pyximport; pyximport.install() #Adi: Added this so that we can import .pyx files (cython)
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
@@ -15,6 +16,12 @@ import datetime
 import logging
 import json
 import yaml
+import subprocess
+import trimesh
+import cv2
+import datetime
+import pickle
+import copy
 from gym_cloth.physics.cloth import Cloth
 from gym_cloth.physics.point import Point
 from gym_cloth.physics.gripper import Gripper
@@ -23,8 +30,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import scipy
 from scipy.spatial import ConvexHull
-import pickle
-import copy
 
 _logging_setup_table = {
     "debug": logging.DEBUG,
@@ -35,6 +40,7 @@ _logging_setup_table = {
 # Listed clockwise. These have norm one. Tune `reduce_factor` from config.
 K = np.sqrt(2)/2
 
+# @deprecated
 _ACT_TO_DIRECTION = {
     0 : ( 0,  1),   # North
     1 : ( K,  K),   # North East
@@ -46,6 +52,7 @@ _ACT_TO_DIRECTION = {
     7 : (-K,  K),   # North West
 }
 
+# @deprecated
 _ACT_TO_NAME = {
     0 : 'North',
     1 : 'NorthEast',
@@ -69,6 +76,8 @@ _REWARD_THRESHOLDS = {
     'sparse1': 900,
     'folding-number': 0 # TODO
 }
+
+_EPS = 1e-5
 
 
 class ClothEnv(gym.Env):
@@ -119,6 +128,7 @@ class ClothEnv(gym.Env):
         self.use_noise_init   = cfg['init']['use_noise']
         self._clip_act_space  = cfg['env']['clip_act_space']
         self._delta_actions   = cfg['env']['delta_actions']
+        self._obs_type        = cfg['env']['obs_type']
         self.bounds = bounds  = (1, 1, 1)
         self.render_proc      = None
         self.render_port      = 5556
@@ -146,7 +156,6 @@ class ClothEnv(gym.Env):
         # Create observation ('1d', '3d') and action spaces. Possibly make the
         # obs_type and other stuff user-specified parameters.
         self._slack = 0.25
-        self._obs_type = '1d'
         self.num_w = num_w = cfg['cloth']['num_width_points']
         self.num_h = num_h = cfg['cloth']['num_height_points']
         self.num_points = num_w * num_h
@@ -154,9 +163,9 @@ class ClothEnv(gym.Env):
         if self._obs_type == '1d':
             self.obslow  = np.ones((3 * self.num_points,)) * -lim
             self.obshigh = np.ones((3 * self.num_points,)) * lim
-        elif self._obs_type == '3d':
-            self.obslow  = np.ones((num_w, num_h, 3)) * -lim
-            self.obshigh = np.ones((num_w, num_h, 3)) * lim
+        elif self._obs_type == 'blender':
+            self.obslow  = np.zeros((480, 640, 3))
+            self.obshigh = np.ones((480, 640, 3))
         else:
             raise ValueError(self._obs_type)
         self.observation_space = spaces.Box(self.obslow, self.obshigh)
@@ -187,7 +196,6 @@ class ClothEnv(gym.Env):
         self.seed()
         self.debug_viz = cfg['init']['debug_matplotlib']
 
-
     @property
     def state(self):
         if self._obs_type == '1d':
@@ -195,15 +203,48 @@ class ClothEnv(gym.Env):
             for pt in self.cloth.pts:
                 lst.extend([pt.x, pt.y, pt.z])
             return np.array(lst)
-        elif self._obs_type == '3d':
-            lst = []
-            for pt in self.cloth.pts:
-                lst.extend([pt.x, pt.y, pt.z])
-            # TODO: double check row/col ordering if it makes sense.
-            return np.array(lst).reshape((self.num_w, self.num_h, 3))
+
+        elif self._obs_type == 'blender':
+            bhead = '/tmp/blender'
+            if not os.path.exists(bhead):
+                os.makedirs(bhead)
+
+            # Step 1: make obj file using trimesh, and save to directory.
+            # TODO wh is hard coded for now, should fix later.
+            wh = 25
+            cloth = np.array([[p.x, p.y, p.z] for p in self.cloth.pts])
+            assert cloth.shape[1] == 3, cloth.shape
+            faces = []
+            for r in range(wh-1):
+                for c in range(wh-1):
+                    pp = r*wh + c
+                    faces.append( [pp,   pp+wh, pp+1] )
+                    faces.append( [pp+1, pp+wh, pp+wh+1] )
+            tm = trimesh.Trimesh(vertices=cloth, faces=faces)
+            # Handle file naming, with protection vs duplicate objects.
+            date = '{}'.format(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+            tm_path = join(bhead, 'gym-cloth-{}-rank-{}'.format(self._logger_idx, date))
+            duplicates = sum([x for x in os.listdir(bhead) if tm_path in x])
+            tm_path = '{}_c{}.obj'.format(tm_path, str(duplicates+1).zfill(2))
+            tm.export(tm_path)
+
+            # Step 2: call blender to get image representation.
+            subprocess.call(['blender', '--background', '--python',
+                    'blender_render/get_image_rep.py', '--', tm_path])
+
+            # Step 3: load image from directory saved by blender.
+            blender_path = tm_path.replace('.obj','.png')
+            img = cv2.imread(blender_path)
+            assert img.shape == (480, 640, 3), img.shape
+            img = cv2.resize(img, dsize=(320, 240)) # x,y order is flipped :(
+            # Debugging for now to see what smaller images look like.
+            cv2.imwrite(tm_path.replace('.obj','_small.png'), img)
+
+            # Step 4: remaining book-keeping, if any?
+            return img
+
         else:
             raise ValueError(self._obs_type)
-
 
     def seed(self, seed=None):
         """Apply the env seed.
@@ -216,7 +257,6 @@ class ClothEnv(gym.Env):
         self.logger.debug("Just re-seeded env to: {}".format(seed))
         return [seed]
 
-
     def save_state(self, cloth_file):
         """Save cloth.pts as a .pkl file.
 
@@ -225,7 +265,6 @@ class ClothEnv(gym.Env):
         """
         with open(cloth_file, 'wb') as fh:
             pickle.dump({"pts": self.cloth.pts, "springs": self.cloth.springs}, fh)
-
 
     def _pull(self, i, iters_pull, x_diag_r, y_diag_r):
         """Actually perform pulling, assuming length/angle actions.
@@ -243,7 +282,6 @@ class ClothEnv(gym.Env):
             pass
         else:
             self.gripper.release()
-
 
     def step(self, action, initialize=False):
         """Execute one action.
@@ -313,8 +351,8 @@ class ClothEnv(gym.Env):
         # ensure we only move a limited amount each time step, might help physics?
         if self._delta_actions:
             total_length = np.sqrt( (delta_x)**2 + (delta_y)**2 )
-            x_dir = delta_x / total_length
-            y_dir = delta_y / total_length
+            x_dir = delta_x / (total_length + _EPS)
+            y_dir = delta_y / (total_length + _EPS)
         else:
             x_dir = np.cos(r_trunc)
             y_dir = np.sin(r_trunc)
@@ -402,7 +440,6 @@ class ClothEnv(gym.Env):
             'out_of_bounds': self._out_of_bounds(),
         }
         return self.state, rew, term, info
-
 
     def _reward(self, action, exit_early):
         """Reward function.
@@ -552,7 +589,6 @@ class ClothEnv(gym.Env):
         log.debug("coverage {:.2f}, reward at end {:.2f}".format(self._current_coverage, rew))
         return rew
 
-
     def _terminal(self):
         """Detect if we're done with an episode, for any reason.
 
@@ -585,7 +621,6 @@ class ClothEnv(gym.Env):
             self.cloth.stop_render()
             #self.render_proc = None
         return done
-
 
     def reset(self):
         """Must call each time we start a new episode.
@@ -689,39 +724,59 @@ class ClothEnv(gym.Env):
                 self.cloth.update()
             logger.debug("Cloth settled, but now let's apply actions.")
 
-            assert not self._delta_actions
-
+            # TODO put this somewhere else? Getting cluttered...
             p0 = self.cloth.pts[-25]
-            length0 = np.random.uniform(0.60, 0.70)
-            angle0  = np.random.uniform(low=-0.1, high=0.1)
-            action0 = (p0.x, p0.y, length0, angle0)
-            if self._clip_act_space:
-                action0 = ((action0[0] - 0.5) * 2,
-                           (action0[1] - 0.5) * 2,
-                           (action0[2] - 0.5) * 2,
-                           (action0[3] / np.pi))
+            if self._delta_actions:
+                dx0 = np.random.uniform(0.60, 0.70)
+                dy0 = np.random.uniform(0.0, 0.2)
+                action0 = (p0.x, p0.y, dx0, dy0)
+                if self._clip_act_space:
+                    action0 = ((p0.x-0.5)*2, (p0.y-0.5)*2, dx0, dy0)
+            else:
+                length0 = np.random.uniform(0.60, 0.70)
+                angle0  = np.random.uniform(low=-0.1, high=0.1)
+                action0 = (p0.x, p0.y, length0, angle0)
+                if self._clip_act_space:
+                    action0 = ((action0[0] - 0.5) * 2,
+                               (action0[1] - 0.5) * 2,
+                               (action0[2] - 0.5) * 2,
+                               (action0[3] / np.pi))
             self.step(action0, initialize=True)
 
             p1 = self.cloth.pts[-1]
-            length1 = np.random.uniform(0.45, 0.50)
-            angle1  = np.random.uniform(low=-0.1, high=0.1)
-            action1 = (p1.x, p1.y, length1, angle1)
-            if self._clip_act_space:
-                action1 = ((action1[0] - 0.5) * 2,
-                           (action1[1] - 0.5) * 2,
-                           (action1[2] - 0.5) * 2,
-                           (action1[3] / np.pi))
+            if self._delta_actions:
+                dx1 = np.random.uniform(0.40, 0.45)
+                dy1 = np.random.uniform(-0.1, 0.1)
+                action1 = (p1.x, p1.y, dx1, dy1)
+                if self._clip_act_space:
+                    action1 = ((p1.x-0.5)*2, (p1.y-0.5)*2, dx1, dy1)
+            else:
+                length1 = np.random.uniform(0.45, 0.50)
+                angle1  = np.random.uniform(low=-0.1, high=0.1)
+                action1 = (p1.x, p1.y, length1, angle1)
+                if self._clip_act_space:
+                    action1 = ((action1[0] - 0.5) * 2,
+                               (action1[1] - 0.5) * 2,
+                               (action1[2] - 0.5) * 2,
+                               (action1[3] / np.pi))
             self.step(action1, initialize=True)
 
             p2 = self.cloth.pts[50]
-            length2 = np.random.uniform(0.3, 0.5)
-            angle2  = np.random.uniform(low=0.1, high=0.4)
-            action2 = (p2.x, p2.y, length2, angle2)
-            if self._clip_act_space:
-                action2 = ((action2[0] - 0.5) * 2,
-                           (action2[1] - 0.5) * 2,
-                           (action2[2] - 0.5) * 2,
-                           (action2[3] / np.pi))
+            if self._delta_actions:
+                dx2 = np.random.uniform(0.25, 0.40)
+                dy2 = np.random.uniform(0.0, 0.3)
+                action2 = (p2.x, p2.y, dx2, dy2)
+                if self._clip_act_space:
+                    action2 = ((p2.x-0.5)*2, (p2.y-0.5)*2, dx2, dy2)
+            else:
+                length2 = np.random.uniform(0.3, 0.5)
+                angle2  = np.random.uniform(low=0.1, high=0.4)
+                action2 = (p2.x, p2.y, length2, angle2)
+                if self._clip_act_space:
+                    action2 = ((action2[0] - 0.5) * 2,
+                               (action2[1] - 0.5) * 2,
+                               (action2[2] - 0.5) * 2,
+                               (action2[3] / np.pi))
             self.step(action2, initialize=True)
 
             logger.debug("Let's continue simulating just for initialization.")
@@ -742,7 +797,6 @@ class ClothEnv(gym.Env):
 
         obs = np.array(self.state)
         return obs
-
 
     def get_random_action(self, atype='over_xy_plane'):
         """Retrieves random action.
@@ -774,7 +828,6 @@ class ClothEnv(gym.Env):
         else:
             raise ValueError(atype)
 
-
     def _out_of_bounds(self):
         """Detect if we're out of bounds, e.g., to stop an action.
 
@@ -802,7 +855,6 @@ class ClothEnv(gym.Env):
            self.logger.debug("np.min(ptsz): {:.4f},  cond {}".format(np.min(ptsz), cond6))
         return outb
 
-
     def render(self, filepath, mode='human', close=False):
         """Much subject to change.
 
@@ -827,7 +879,6 @@ class ClothEnv(gym.Env):
             self.render_proc = subprocess.Popen(["./clothsim"], stdout=dev_null, stderr=dev_null)
             os.chdir(owd)
 
-
     # --------------------------------------------------------------------------
     # Random helper methods, debugging, etc.
     # --------------------------------------------------------------------------
@@ -847,7 +898,6 @@ class ClothEnv(gym.Env):
             #_save_bad_hull(points)
             coverage = 0
         return coverage
-
 
     def _debug_viz_plots(self):
         """Use `plt.ion()` for interactive plots, requires `plt.pause(...)` later.
@@ -881,7 +931,6 @@ class ClothEnv(gym.Env):
         ax2.set_zlim([0, 1])
         plt.pause(0.0001)
 
-
     def _save_matplotlib_img(self, target_dir=None):
         """Save matplotlib image into a target directory.
         """
@@ -890,7 +939,6 @@ class ClothEnv(gym.Env):
             target_dir = (self.fname_log).replace('.log','.png')
         print("Note: saving matplotlib img of env at {}".format(target_dir))
         plt.savefig(target_dir)
-
 
     def _setup_logger(self):
         """Set up the logger (and also save the config w/similar name).
@@ -932,7 +980,6 @@ class ClothEnv(gym.Env):
             json.dump(cfg, fh, indent=4, sort_keys=True)
         self.fname_log = filename
         self.fname_json = json_str
-
 
     def _act2str(self, action):
         """Turn an action into something more human-readable.

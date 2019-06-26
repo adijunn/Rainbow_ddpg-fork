@@ -1,4 +1,9 @@
 import argparse
+import sys
+import os
+import re
+import multiprocessing
+import yaml
 from baselines import logger
 from baselines.common.misc_util import (
     boolean_flag,
@@ -18,7 +23,7 @@ from common.tf_util import get_session
 
 
 
-def build_env(args, cloth_cfg_path=None, render_path=None, start_state_path=None, num_env=1, seed=1, alg='ddpg'):
+def build_env(cloth_cfg_path=None, render_path=None, start_state_path=None, num_env=1, seed=1, alg='ddpg'):
     """Daniel: actually construct the env, using 'vector envs' for parallelism.
     For now our cloth env can follow the non-atari and non-retro stuff, because
     I don't think we need a similar kind of 'wrapping' that they do. Note that
@@ -34,7 +39,7 @@ def build_env(args, cloth_cfg_path=None, render_path=None, start_state_path=None
     #alg = args.alg
     #seed = args.seed
     #env_type, env_id = get_env_type(args)
-    env_type = 'Cloth-v0'
+    env_type = 'cloth'
     env_id = 'cloth'
     
 
@@ -72,9 +77,9 @@ def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_laye
         demo_epsilon, replay_alpha, conv_size, **kwargs):
    
     #Need to fill these in! 
-    cloth_cfg_path = ''
+    cloth_cfg_path = '/Users/adivganapathi/Documents/UC Berkeley/Rainbow_ddpg-fork/cfg/demo_spaces.yaml'
     render_path = ''
-    init_state = ''
+    init_state_path = '/Users/adivganapathi/Documents/UC Berkeley/Rainbow_ddpg-fork/init_states/state_init_easy_81_coverage.pkl'
     
     #Adi: Commenting out the following 7 lines to replace with next section 
     # Create envs.
@@ -96,9 +101,9 @@ def run(env_id, eval_env_id, noise_type, evaluation, demo_policy, num_dense_laye
 	#Commented out following if statement because I think they already clip the action space to (-1, 1) in the DDPG file
         #if 'clip_act_space' in cloth_config['env']:
             #extra_args['limit_act_range'] = cloth_config['env']['clip_act_space']
-    env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path, num_env=1, seed=1, alg='ddpg')
-    eval_env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path, num_env=1, seed=1, alg='ddpg')  
-    demo_env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_path, num_env=1, seed=1, alg='ddpg')  
+    env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_state_path, num_env=1, seed=1, alg='ddpg')
+    eval_env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_state_path, num_env=1, seed=1, alg='ddpg')  
+    demo_env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_state_path, num_env=1, seed=1, alg='ddpg')  
      
 
     # Parse noise_type

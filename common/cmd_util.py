@@ -84,6 +84,7 @@ def make_env(env_id, env_type, mpi_rank=0, subrank=0, seed=None, reward_scale=1.
     wrapper_kwargs = wrapper_kwargs or {}
 
     if env_type == 'cloth':
+        print("Env Type is Cloth")
         assert cloth_cfg_path is not None
         from gym_cloth.envs import ClothEnv
         env = ClothEnv(cloth_cfg_path, subrank=subrank, start_state_path=start_state_path)
@@ -102,6 +103,7 @@ def make_env(env_id, env_type, mpi_rank=0, subrank=0, seed=None, reward_scale=1.
                                         use_restricted_actions=retro.Actions.DISCRETE,
                                         state=gamestate)
     else:
+        print("USING WRONG COMMAND")
         env = gym.make(env_id)
 
     if flatten_dict_observations and isinstance(env.observation_space, gym.spaces.Dict):
