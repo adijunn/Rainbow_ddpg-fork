@@ -191,12 +191,33 @@ class ClothEnv(gym.Env):
                     high=np.array([b0+self._slack, b1+self._slack, 1.0,  np.pi])
                 )
 
+
         # Bells and whistles
         self._setup_logger()
         self.seed()
         self.debug_viz = cfg['init']['debug_matplotlib']
 
+        #Adi: Added following lines to support our cloth env low dim state
+        self.reset()
+        self.state_dim = self.state_vector().shape
+        high = np.inf * np.ones(self.state_dim)
+        low = -high
+        aux_high = np.ones((16,)) * 10
+        self.state_space = spaces.Box(low, high)
+        self.aux_space = spaces.Box(-aux_high, aux_high)
+   
+
+    #Adi: Added this method to make compatible with Rainbow DDPG and to differentiate between getting observation and getting state
+    def state_vector(self):
+        lst = []
+        for pt in self.cloth.pts:
+            lst.extend([pt.x, pt.y, pt.z])
+        low_dim = np.array(lst) 
+        return low_dim.astype(np.float32)
+
+
     @property
+    #This method should really be called "get_obs"
     def state(self):
         if self._obs_type == '1d':
             lst = []
@@ -245,6 +266,11 @@ class ClothEnv(gym.Env):
 
         else:
             raise ValueError(self._obs_type)
+
+    #Adi: Added this method to make compatible with Rainbow DDPG
+    def _get_obs(self):
+        return self.state
+
 
     def seed(self, seed=None):
         """Apply the env seed.
