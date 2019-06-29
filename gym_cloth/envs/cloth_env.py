@@ -204,7 +204,12 @@ class ClothEnv(gym.Env):
         low = -high
         aux_high = np.ones((16,)) * 10
         self.state_space = spaces.Box(low, high)
+        #Doing this to pass in hardcoded shape of state_space
+        print("STATE SPACE SHAPE: ")
+        print(self.state_space.shape)
         self.aux_space = spaces.Box(-aux_high, aux_high)
+        print("AUX SPACE SHAPE: ")
+        print(self.aux_space.shape)
    
 
     #Adi: Added this method to make compatible with Rainbow DDPG and to differentiate between getting observation and getting state
@@ -250,8 +255,14 @@ class ClothEnv(gym.Env):
             tm.export(tm_path)
 
             # Step 2: call blender to get image representation.
-            subprocess.call(['blender', '--background', '--python',
+            #subprocess.call(['blender', '--background', '--python',
+            #        'blender_render/get_image_rep.py', '--', tm_path])
+
+
+            #Temporary fix (giving absolute path to blender 2.8)  
+            subprocess.call(['/Users/adivganapathi/Downloads/blender/blender.app/Contents/MacOS/./blender', '--background', '--python',
                     'blender_render/get_image_rep.py', '--', tm_path])
+
 
             # Step 3: load image from directory saved by blender.
             blender_path = tm_path.replace('.obj','.png')

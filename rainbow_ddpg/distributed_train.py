@@ -424,7 +424,9 @@ class DistributedTrain(object):
                 "run_name": self.run_name,
                 "obs_shape": self.eval_env.observation_space.shape,
                 "action_shace": self.eval_env.action_space.shape,
-                "aux_shape": self.eval_env.aux_space.shape,
+                #Passing in hardcoded shape
+                #"aux_shape": self.eval_env.aux_space.shape,
+                "aux_shape": (16,),
                 "call_command": " ".join(sys.argv),
             },
             "demo_data": {
@@ -487,14 +489,16 @@ def train(env,
           **kwargs):
     # we assume symmetric actions.
     assert (np.abs(env.action_space.low) == env.action_space.high).all()
+    #Replaced env.state_space.shape with (1875,)
+    #Replaced env.aux_space.shape with (16,)
     agent = DDPG(
         actor,
         critic,
         memory,
         env.observation_space.shape,
         env.action_space.shape,
-        env.state_space.shape,
-        env.aux_space.shape,
+        (1875,),
+        (16,),
         gamma=gamma,
         tau=tau,
         normalize_observations=normalize_observations,
