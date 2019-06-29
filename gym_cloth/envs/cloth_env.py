@@ -161,11 +161,15 @@ class ClothEnv(gym.Env):
         self.num_points = num_w * num_h
         lim = 100
         if self._obs_type == '1d':
+            #Added the observation space line
             self.obslow  = np.ones((3 * self.num_points,)) * -lim
             self.obshigh = np.ones((3 * self.num_points,)) * lim
+            self.observation_space = spaces.Box(self.obslow, self.obshigh)
         elif self._obs_type == 'blender':
-            self.obslow  = np.zeros((480, 640, 3))
-            self.obshigh = np.ones((480, 640, 3))
+            #Adi: Had to change to 240x320 and the observation space line as well
+            self.obslow  = np.zeros((240, 320, 3))
+            self.obshigh = np.ones((240, 320, 3))
+            self.observation_space = spaces.Box(self.obslow, self.obshigh, dtype=np.uint8)
         else:
             raise ValueError(self._obs_type)
         self.observation_space = spaces.Box(self.obslow, self.obshigh)

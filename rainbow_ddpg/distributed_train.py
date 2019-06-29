@@ -76,7 +76,9 @@ class RolloutWorker(object):
 
     def exec_rollouts(self):
         with self.agent.sess.as_default():
-            env = gym.make(self.env_id)
+            #Adi: Want to create our own custom cloth env, so we can't use gym.make()
+            #env = gym.make(self.env_id)
+            env = build_env()
             env.seed(self.seed)
             obs0, aux0, state0 = env.reset(), env.get_aux(), env.get_state()
             episode_reward = 0

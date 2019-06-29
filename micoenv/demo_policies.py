@@ -47,7 +47,7 @@ class Corners(DemoPolicy):
         #We are directly being passed the state, so no need to go through env
         #pts = env.cloth.pts
         #Need to replace line below with something else
-        pts_unrolled = state (This won't work... need to do inverse of what is being done in the state function in gym_cloth/envs/cloth_env.py)
+        pts_unrolled = state
         lst = []
         lst_tmp = []
         count = 1
@@ -147,6 +147,7 @@ class ArmData(object):
 
 
 policies = {
+    "corners": Corners,
     "pusher": Pusher,
     "None": None,
 }
