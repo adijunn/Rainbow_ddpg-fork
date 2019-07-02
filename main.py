@@ -4,7 +4,8 @@ import os
 import re
 import multiprocessing
 import yaml
-from baselines import logger
+#from baselines import logger
+import logger
 from baselines.common.misc_util import (
     boolean_flag,
 )
@@ -61,12 +62,22 @@ def build_env(cloth_cfg_path=None, render_path=None, start_state_path=None, num_
         config.gpu_options.allow_growth = True
         get_session(config=config)
         flatten_dict_observations = alg not in {'her'}
-        env = make_vec_env(env_id, env_type, num_env or 1, seed,
-                           reward_scale=1,
-                           flatten_dict_observations=flatten_dict_observations,
-                           cloth_cfg_path=cloth_cfg_path,
-                           render_path=render_path,
-                           start_state_path=start_state_path)
+        #Adi: I don't think we want to make a vector environment for now because it's causing a lot of trouble temporarily.. let's just start with a single non-vec env
+        #env = make_vec_env(env_id, env_type, num_env or 1, seed,
+        #                   reward_scale=1,
+        #                   flatten_dict_observations=flatten_dict_observations,
+        #                   cloth_cfg_path=cloth_cfg_path,
+        #                   render_path=render_path,
+        #                   start_state_path=start_state_path)
+        #Adi: I have to directly define a few more variables because we are now making a single environment instead of a vector environment
+        #Adi: These values are subject to change
+        mpi_rank = 0
+        subrank = 0
+        reward_scale = 1.0
+        gamestate = None
+        wrapper_kwargs = None
+        logger_dir = logger.get_dir() 
+        env = make_env(env_id=env_id, env_type=env_type, mpi_rank=mpi_rank, subrank=subrank, seed=seed, reward_scale=reward_scale, gamestate=gamestate, flatten_dict_observations=flatten_dict_observations, wrapper_kwargs=wrapper_kwargs, logger_dir=logger_dir, cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=start_state_path)
         if env_type == 'mujoco':
             env = VecNormalize(env)
 
@@ -177,8 +188,8 @@ def parse_args():
         type=str,
         default='Pusher-v1')
     parser.add_argument('--eval-env-id', type=str, default='')
-    boolean_flag(parser, 'render-eval', default=True)
-    boolean_flag(parser, 'render-demo', default=True)
+    boolean_flag(parser, 'render-eval', default=False)
+    boolean_flag(parser, 'render-demo', default=False)
     boolean_flag(parser, 'layer-norm', default=False)
     boolean_flag(parser, 'render', default=False)
     boolean_flag(parser, 'normalize-observations', default=True)

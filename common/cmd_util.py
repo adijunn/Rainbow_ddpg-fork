@@ -125,6 +125,9 @@ def make_env(env_id, env_type, mpi_rank=0, subrank=0, seed=None, reward_scale=1.
     if reward_scale != 1:
         env = retro_wrappers.RewardScaler(env, reward_scale)
 
+    #Adi: Let's return the actual env for now instead of the wrapped version for simplicity.  Can change this back later.
+    env = env.unwrapped
+
     return env
 
 

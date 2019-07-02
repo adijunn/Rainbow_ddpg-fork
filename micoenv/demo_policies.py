@@ -54,10 +54,14 @@ class Corners(DemoPolicy):
         for pt_u in pts_unrolled:
             lst_tmp.append(pt_u)
             if count == 3:
-                lst.append(lst_temp)
+                lst.append(lst_tmp)
                 lst_tmp = []
                 count = 1
+            else:
+                count += 1
         pts = np.array(lst)
+        #print(len(pts))
+        #print(pts)
                 
         RAD_TO_DEG = 180 / np.pi
 

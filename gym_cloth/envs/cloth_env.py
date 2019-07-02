@@ -224,6 +224,17 @@ class ClothEnv(gym.Env):
         low_dim = np.array(lst) 
         return low_dim.astype(np.float32)
 
+    #Adi: Added this method to make compatible with Rainbow DDPG.
+    def get_state(self):
+        return self.state_vector()
+
+    #Adi: Added this method to make compatible with Ranbow DDPG.  We need to think about how we want to define our auxiliary output.  The commented out portion is how they define it.  It also should match the aux_space shape I think.
+    def get_aux(self):
+        #grip_state = self.p.getLinkState(self.arm.armId, 6, computeLinkVelocity=1)
+        #return np.concatenate([self.arm.get_joint_poses(), np.array(grip_state[0]), self.arm.goalPosition])
+        #Temporary return statement
+        return spaces.Box(np.ones((16,))*-10, np.ones((16,))*10)
+
 
     @property
     #This method should really be called "get_obs"
@@ -297,6 +308,17 @@ class ClothEnv(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         self.logger.debug("Just re-seeded env to: {}".format(seed))
         return [seed]
+
+    #Adi: Adding this method which is the exact same as save state but with a different name so that it can be used with Rainbow DDPG.
+    def store_state(self, cloth_file):
+        """Save cloth.pts as a .pkl file.
+
+        Be sure to supply a full path. Otherwise it saves under the `build/`
+        directory somewhere.
+        """
+        with open(cloth_file, 'wb') as fh:
+            pickle.dump({"pts": self.cloth.pts, "springs": self.cloth.springs}, fh)
+    
 
     def save_state(self, cloth_file):
         """Save cloth.pts as a .pkl file.

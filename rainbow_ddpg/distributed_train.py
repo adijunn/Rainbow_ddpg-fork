@@ -376,6 +376,8 @@ class DistributedTrain(object):
             frames = []
             while True:
                 iteration += 1
+                #print(len(state0))
+                #print(state0)
                 action = self.demo_policy.choose_action(state0)
                 fn = demo_states_template.format(self.run_name, iteration)
                 self.demo_env.store_state(fn)
