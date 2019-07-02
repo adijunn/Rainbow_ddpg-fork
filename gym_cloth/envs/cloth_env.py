@@ -233,7 +233,8 @@ class ClothEnv(gym.Env):
         #grip_state = self.p.getLinkState(self.arm.armId, 6, computeLinkVelocity=1)
         #return np.concatenate([self.arm.get_joint_poses(), np.array(grip_state[0]), self.arm.goalPosition])
         #Temporary return statement
-        return spaces.Box(np.ones((16,))*-10, np.ones((16,))*10)
+        #return spaces.Box(np.ones((16,))*-10, np.ones((16,))*10)
+        return np.ones((16,))*5
 
 
     @property

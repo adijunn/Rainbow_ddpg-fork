@@ -216,7 +216,7 @@ def parse_args():
     parser.add_argument('--num-demo-steps', type=int, default=20)
     parser.add_argument('--num-pretrain-steps', type=int, default=2000)
     parser.add_argument('--run-name', type=str, default='ignore')
-    parser.add_argument('--demo-policy', type=str, default='corners')
+    parser.add_argument('--demo-policy', type=str, default='None')
     parser.add_argument('--lambda-pretrain', type=float, default=5.0)
     parser.add_argument('--lambda-nstep', type=float, default=0.5)
     parser.add_argument('--lambda-1step', type=float, default=1.0)

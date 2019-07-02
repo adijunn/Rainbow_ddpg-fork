@@ -10,6 +10,7 @@ from baselines.common.schedules import LinearSchedule
 import sys
 import os
 from threading import Thread
+from main import build_env
 
 tmp = os.path.dirname(sys.modules['__main__'].__file__) + "/tmp"
 demo_states_dir = tmp + "/demo_states"
@@ -78,7 +79,11 @@ class RolloutWorker(object):
         with self.agent.sess.as_default():
             #Adi: Want to create our own custom cloth env, so we can't use gym.make()
             #env = gym.make(self.env_id)
-            env = build_env()
+            cloth_cfg_path = '/Users/adivganapathi/Documents/UC Berkeley/Rainbow_ddpg-fork/cfg/demo_spaces.yaml'
+            render_path = ''
+            init_state_path = '/Users/adivganapathi/Documents/UC Berkeley/Rainbow_ddpg-fork/init_states/state_init_easy_81_coverage.pkl'
+            env = build_env(cloth_cfg_path=cloth_cfg_path, render_path=render_path, start_state_path=init_state_path, num_env=1, seed=1, alg='ddpg')
+           
             env.seed(self.seed)
             obs0, aux0, state0 = env.reset(), env.get_aux(), env.get_state()
             episode_reward = 0
@@ -227,7 +232,8 @@ class DistributedTrain(object):
             if self.demo_policy:
                 self._initialize_memory_with_policy()
             self.agent.memory.demonstrations_done()
-            self.pretrain()
+            #Adi: Temporarily no demonstrations so there is nothing to pretrain on
+            #self.pretrain()
             ret = self.train()
             self.sess = None
             return ret
